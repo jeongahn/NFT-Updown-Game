@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Main Page</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: "Poppins", sans-serif;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 10vh;
+        margin: 0;
+      }
+      h1 {
+        text-align: center;
+        margin-bottom: 20px;
+      }
+      .container {
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+      }
+      .inner-container {
+        display: flex;
+        justify-content: center;
+        margin: 30px;
+      }
+      .chess-container {
+        margin-top: 20px;
+        padding-left: 50px;
+        flex: 1 1 1500px;
+        max-width: 1500px;
+      }
+      .betting-container {
+        flex: 1 1 300px;
+        max-width: 1500px;
+        padding-left: 50px;
+        padding-right: 50px;
+      }
+      .game-state {
+        width: 210px;
+        height: 50px;
+        margin-bottom: 30px;
+        border: 1px solid black;
+        border-radius: 5px;
+        text-align: center;
+        line-height: 50px;
+        background-color: rgb(255, 255, 255);
+      }
+      .highlight {
+        background-color: rgb(22, 144, 26);
+      }
+      .grid-container {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        grid-template-rows: repeat(5, 1fr);
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1;
+        background-image: url("Board.png");
+        background-size: cover;
+      }
+      .grid-item {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 30px;
+        color: white;
+        text-shadow: -1px 0 black, 0 1px black, 1px 0 black, 0 -1px black;
+        border: none;
+        background-color: transparent;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+      .grid-item:hover {
+        background-color: rgba(0, 0, 0, 0.5);
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.7.5/dist/web3.min.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Up-Down Game</h1>
+      <div class="inner-container">
+        <div class="chess-container">
+          <div class="grid-container" id="chessBoard"></div>
+        </div>
+        <div class="betting-container">
+          <h3>Betting</h3>
+          <div style="display: flex; border-radius: 5px; border: 1px solid black; padding: 10px">
+            <input type="number" id="bet-amount" placeholder="1~5 ehter" />
+            <button
+              style="border-radius: 5px; background-color: rgb(177, 229, 177)"
+              onclick="startGame()"
+            >
+              Start Game
+            </button>
+          </div>
+          <br />
+          <h3>Game State</h3>
+          <div id="stateX3" class="game-state">x3</div>
+          <div id="stateX2" class="game-state">x2</div>
+          <div id="stateX1" class="game-state">x1</div>
+          <div style="justify-content: center">
+            <div id="resultMessage" style="margin-top: 20px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      var abiobj = [
+        {
+          inputs: [],
+          stateMutability: "nonpayable",
+          type: "constructor",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "player",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "amount",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "randomNumber",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "string",
+              name: "isWin",
+              type: "string",
+            },
+          ],
+          name: "BetResult",
+          type: "event",
+        },
+        {
+          inputs: [],
+          name: "deposit",
+          outputs: [],
+          stateMutability: "payable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "number",
+              type: "uint256",
+            },
+          ],
+          name: "progressGame",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "startGame",
+          outputs: [],
+          stateMutability: "payable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "withdrawFunds",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "gamePossible",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "owner",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "totalAmount",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+      ];
+      var address = "your contract address";
+      var web3, contractInstance;
+
+      window.addEventListener("load", async () => {
+        if (window.ethereum) {
+          window.web3 = new Web3(window.ethereum);
+          await window.ethereum.enable();
+        } else {
+          alert("Please install MetaMask to use this dApp!");
+          return;
+        }
+
+        contractInstance = new window.web3.eth.Contract(abiobj, address);
+        drawChessBoard();
+        watchBetResult();
+      });
+
+      async function startGame() {
+        const betAmount = document.getElementById("bet-amount").value;
+        const accounts = await ethereum.request({ method: "eth_requestAccounts" });
+
+        try {
+          await contractInstance.methods.startGame().send({
+            from: accounts[0],
+            value: web3.utils.toWei(betAmount, "ether"),
+            gas: 3000000,
+          });
+          alert(betAmount + " ether로 게임을 시작합니다.");
+        } catch (err) {
+          console.error(err);
+          alert("Error starting game: " + err.message);
+        }
+      }
+
+      async function depositFunds() {
+        const depositAmount = document.getElementById("deposit-amount").value;
+        const accounts = await ethereum.request({ method: "eth_requestAccounts" });
+
+        try {
+          await contractInstance.methods.deposit().send({
+            from: accounts[0],
+            value: web3.utils.toWei(depositAmount, "ether"),
+            gas: 3000000,
+          });
+          alert("Deposited amount: " + depositAmount);
+        } catch (err) {
+          console.error(err);
+          alert("Error depositing funds: " + err.message);
+        }
+      }
+
+      async function handleButtonClick(num) {
+        const accounts = await ethereum.request({ method: "eth_requestAccounts" });
+
+        try {
+          const isGamePossible = await contractInstance.methods.gamePossible().call();
+          if (!isGamePossible) {
+            alert("Game is not currently possible.");
+            return;
+          }
+
+          await contractInstance.methods.progressGame(num).send({
+            from: accounts[0],
+            gas: 3000000,
+          });
+        } catch (err) {
+          console.error(err);
+          alert("Error progressing game: " + err.message);
+        }
+      }
+
+      function drawChessBoard() {
+        const chessBoard = document.getElementById("chessBoard");
+        const numbers = [...Array(25).keys()].map((x) => x + 1);
+        numbers.sort(() => Math.random() - 0.5);
+
+        numbers.forEach((num) => {
+          const button = document.createElement("button");
+          button.textContent = num;
+          button.className = "grid-item";
+          button.onclick = () => handleButtonClick(num);
+          chessBoard.appendChild(button);
+        });
+      }
+
+      function watchBetResult() {
+        contractInstance.events.BetResult({}, (error, event) => {
+          if (error) {
+            console.error(error);
+            return;
+          }
+
+          const betResult = event.returnValues;
+          const resultMessage = document.getElementById("resultMessage");
+
+          if (betResult.isWin === "answer") {
+            resultMessage.textContent = "You win";
+            window.location.href = "SucFin.html";
+          } else if (betResult.isWin === "game over") {
+            updateGameState();
+            resultMessage.textContent = "Game Over";
+            window.location.href = "FailFin.html";
+          } else {
+            resultMessage.textContent = `${betResult.isWin}`;
+            updateGameState();
+          }
+        });
+      }
+
+      function updateGameState() {
+        const stateX3 = document.getElementById("stateX3");
+        const stateX2 = document.getElementById("stateX2");
+        const stateX1 = document.getElementById("stateX1");
+
+        if (stateX3.classList.contains("highlight")) {
+          stateX3.classList.remove("highlight");
+          stateX2.classList.add("highlight");
+        } else if (stateX2.classList.contains("highlight")) {
+          stateX2.classList.remove("highlight");
+          stateX1.classList.add("highlight");
+        } else if (
+          !stateX3.classList.contains("highlight") &&
+          !stateX2.classList.contains("highlight") &&
+          !stateX1.classList.contains("highlight")
+        ) {
+          stateX3.classList.add("highlight");
+        }
+      }
+    </script>
+  </body>
+</html>
